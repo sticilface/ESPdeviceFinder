@@ -1,17 +1,10 @@
-
-
 #include "ESPdeviceFinder.h"
 
-// OLD
-// #define UDP_PING_TIMEOUT 30000
-// #define UDP_TASK_TIMEOUT 5000
-// #define UDP_STALE_TIMEOUT 100000
+#define UDP_PING_TIMEOUT 1 * 60 * 1000   //  1min ping interval
+#define UDP_TASK_TIMEOUT 10 * 1000       //  10sec tasker
+#define UDP_STALE_TIMEOUT 2 * 60 * 1000 // 2min stale remove...
 
-#define UDP_PING_TIMEOUT 5 * 60 * 1000   //  5min ping interval
-#define UDP_TASK_TIMEOUT 60 * 1000       //  1 min tasker
-#define UDP_STALE_TIMEOUT 20 * 60 * 1000 // 20min stale remove...
-
-static const IPAddress MELVANIMATE_MULTICAST_ADDR(224, 0, 0, 251);
+static const IPAddress ESPdeviceFinder_MULTICAST_ADDR(224, 0, 0, 251);
 
 void ESPdeviceFinder::begin(const char * host, uint16_t port)
 {
@@ -20,7 +13,7 @@ void ESPdeviceFinder::begin(const char * host, uint16_t port)
         _port = port;
 
         if (WiFi.isConnected()) {
-                _state = _udp.beginMulticast( WiFi.localIP(),  MELVANIMATE_MULTICAST_ADDR, _port);
+                _state = _udp.beginMulticast( WiFi.localIP(),  ESPdeviceFinder_MULTICAST_ADDR, _port);
         }
 
         _gotIPHandler = WiFi.onStationModeGotIP([this](const WiFiEventStationModeGotIP & event) {
@@ -131,7 +124,7 @@ bool ESPdeviceFinder::_listen()
 {
         DebugUDPf("[UDP_broadcast::_listen]\n");
 
-        _state = _udp.beginMulticast( WiFi.localIP(),  MELVANIMATE_MULTICAST_ADDR, _port);
+        _state = _udp.beginMulticast( WiFi.localIP(),  ESPdeviceFinder_MULTICAST_ADDR, _port);
 
 }
 
@@ -182,7 +175,7 @@ void ESPdeviceFinder::_sendRequest(UDP_REQUEST_TYPE method)
 
         IPAddress IP = WiFi.localIP();
 
-        if (_udp.beginPacketMulticast(MELVANIMATE_MULTICAST_ADDR, _port, WiFi.localIP())) {
+        if (_udp.beginPacketMulticast(ESPdeviceFinder_MULTICAST_ADDR, _port, WiFi.localIP())) {
 
                 const char ip[4] = { IP[0], IP[1], IP[2], IP[3] };
 
@@ -276,38 +269,6 @@ IPAddress ESPdeviceFinder::getIP(uint8_t i)
         }
 }
 
-// void ESPdeviceFinder::addJson(JsonArray & root) {
-
-//         //  this adds the current device.  Rather than keep it in memory...
-//         JsonObject & thisdevice = root.createNestedObject();
-//         JsonArray & IPjson = thisdevice.createNestedArray("IP");
-
-//         IPAddress IP = WiFi.localIP();
-
-//         IPjson.add(IP[0]);
-//         IPjson.add(IP[1]);
-//         IPjson.add(IP[2]);
-//         IPjson.add(IP[3]);
-
-//         thisdevice["name"] = _host;
-
-
-//         for (UDPList::iterator it=devices.begin(); it!=devices.end(); ++it) {
-//                 UDP_item & udp_item = **it;
-
-//                 JsonObject & item = root.createNestedObject();
-
-//                 JsonArray & IP = item.createNestedArray("IP");
-//                 IP.add(udp_item.IP[0]);
-//                 IP.add(udp_item.IP[1]);
-//                 IP.add(udp_item.IP[2]);
-//                 IP.add(udp_item.IP[3]);
-
-//                 item["name"] = udp_item.name.get();
-
-//         }
-// }
-
 
 #ifdef UDP_TEST_SENDER
 
@@ -321,7 +282,7 @@ void ESPdeviceFinder::_test_sender()
 
                 timeout = millis();
 
-                if (_udp.beginPacketMulticast(MELVANIMATE_MULTICAST_ADDR, _port, WiFi.localIP())) {
+                if (_udp.beginPacketMulticast(ESPdeviceFinder_MULTICAST_ADDR, _port, WiFi.localIP())) {
 
                         char buf[32] = {'\0'};
 
@@ -353,40 +314,6 @@ void ESPdeviceFinder::_test_sender()
                         }
                 }
         }
-
-///  old
-        //         if (!_conn) {
-        //                 return;
-        //         }
-        //
-        //         char buf[32] = {'\0'};
-        //
-        //         char * end = strcpy(buf, "Test Sender ");
-        //
-        //         snprintf( end, 5, "%u", number++);
-        //
-        //         const char ip[4] = { 192, 168, 1, (uint8_t)random (1,255) };
-        //
-        //         _conn->flush();
-        //         _conn->append(reinterpret_cast<const char*>(&method), 1);
-        //         _conn->append(reinterpret_cast<const char*>(&_port), 2);
-        //         _conn->append( ip, 4);
-        //
-        //         if (_host) {
-        //                 //DebugUDPf("[UDP_broadcast::_sendRequest] host = %s\n", _host);
-        //                 uint8_t host_len = strlen(_host);
-        //                 _conn->append(reinterpret_cast<const char*>(&host_len), 1);
-        //                 _conn->append(_host, strlen(_host) + 1);
-        //         } else {
-        //                 //DebugUDPf("[UDP_broadcast::_sendRequest] No Host\n");
-        //                 _conn->append("No Host", 7);
-        //         }
-        //
-        //
-        //         _conn->send();
-        //
-        // }
-
 
 }
 
