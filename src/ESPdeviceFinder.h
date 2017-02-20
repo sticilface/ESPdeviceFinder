@@ -21,7 +21,9 @@
 
 
 */
-#pragma once
+
+#ifndef ESP_DEVICE_FINDER_H
+#define ESP_DEVICE_FINDER_H
 
 #include <functional>
 
@@ -110,3 +112,7 @@ private:
 
 
 };
+
+#endif
+
+
