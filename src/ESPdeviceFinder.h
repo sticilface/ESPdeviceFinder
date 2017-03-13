@@ -28,13 +28,16 @@
 #include <functional>
 
 #include <ESP8266WiFi.h>
-#include <WiFiUdp.h>
+//#include <WiFiUdp.h>
+#include <Udp.h>
 #include <IPAddress.h>
+
 #include <list>
-//#include <ArduinoJson.h>
+
+#define DEFAULT_ESPDEVICE_PORT 8269
 
 //#define DebugUDP Serial
-//#define UDP_TEST_SENDER //  this sends lots of pretend
+//#define UDP_TEST_SENDER //  this sends lots of pretend values not currently implemented correctly though! 
 
 #if defined(DebugUDP)
 //#define DebugUDPf(...) DebugUDP.printf(__VA_ARGS__)
@@ -67,15 +70,20 @@ typedef std::list<  std::unique_ptr<UDP_item>  > UDPList;
 
 class ESPdeviceFinder {
 public:
-  ESPdeviceFinder() {}
-  void begin(const char * host, uint16_t port);
-  void loop();
+  ESPdeviceFinder();
+  ~ESPdeviceFinder();
+  void begin(const char * host = nullptr, uint16_t port = DEFAULT_ESPDEVICE_PORT);
+  void end(); 
+  
   void setHost(const char * host);
+  void setPort(uint16_t port); 
+  void setMulticastIP(IPAddress addr); 
+  
+  void loop();
+
 
 
   uint8_t count();
-  //void addJson(JsonArray & root);
- // UDPList getList() { return devices; }
   const char * getName(uint8_t i); 
   IPAddress getIP(uint8_t i); 
 
@@ -84,26 +92,34 @@ private:
   
   enum UDP_REQUEST_TYPE : uint8_t { PING = 0, PONG };
   UDPList devices;
-  void _restart();
+  //void _restart();
   bool _listen();
   //uint32_t _getOurIp();
   void _update();
   void _parsePacket();
   void _sendRequest(UDP_REQUEST_TYPE method);
   void _addToList(IPAddress IP, std::unique_ptr<char[]>(ID));
+  void _restart(); 
+
+  void _onRx();
 
   uint16_t _port{0};
-  const char * _host{nullptr};
+  String _host;
   uint32_t _lastmessage{0};
-//  UdpContext* _conn{nullptr};
+  
   bool _waiting4ping{false};
   uint32_t _checkTimeOut{0};
   uint32_t _sendPong{0};
-  bool _state{false};
-  WiFiUDP _udp;
+  //bool _state{false};
+  //WiFiUDP _udp;
 
-   WiFiEventHandler _disconnectedHandler;
-   WiFiEventHandler _gotIPHandler;
+  WiFiEventHandler _disconnectedHandler;
+  WiFiEventHandler _gotIPHandler;
+
+  UdpContext* _conn{nullptr};
+  bool _initialized{false};
+  IPAddress _addr; 
+
 
   #ifdef UDP_TEST_SENDER
       void _test_sender();

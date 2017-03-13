@@ -1,44 +1,142 @@
 #include "ESPdeviceFinder.h"
 
+extern "C"
+{
+#include <include/wl_definitions.h>
+#include <osapi.h>
+#include <ets_sys.h>
+}
+
+//#include "debug.h"
+#include <ESP8266WiFi.h>
+#include <WiFiUdp.h>
+#include <lwip/opt.h>
+#include <lwip/udp.h>
+#include <lwip/inet.h>
+#include <lwip/igmp.h>
+#include <lwip/mem.h>
+#include <include/UdpContext.h>
+
 #define UDP_PING_TIMEOUT 1 * 60 * 1000   //  1min ping interval
 #define UDP_TASK_TIMEOUT 10 * 1000       //  10sec tasker
 #define UDP_STALE_TIMEOUT 2 * 60 * 1000 // 2min stale remove...
 
 static const IPAddress ESPdeviceFinder_MULTICAST_ADDR(224, 0, 0, 251);
 
-void ESPdeviceFinder::begin(const char * host, uint16_t port)
+ESPdeviceFinder::ESPdeviceFinder(): _addr(ESPdeviceFinder_MULTICAST_ADDR)
 {
 
-        _host = host;
-        _port = port;
+        //     WiFiEventHandler onStationModeGotIP(std::function<void(const WiFiEventStationModeGotIP&)>);
 
-        if (WiFi.isConnected()) {
-                _state = _udp.beginMulticast( WiFi.localIP(),  ESPdeviceFinder_MULTICAST_ADDR, _port);
+        // if (WiFi.isConnected()) {
+        //         _state = _udp.beginMulticast( WiFi.localIP(),  MELVANIMATE_MULTICAST_ADDR, _port);
+        // }
+
+
+
+
+}
+
+ESPdeviceFinder::~ESPdeviceFinder()
+{
+        end();
+}
+
+void ESPdeviceFinder::end()
+{
+        if (_conn) {
+                _conn->unref();
+                delete _conn;
+                _conn = nullptr;
+        }
+        _initialized = false;
+}
+
+void ESPdeviceFinder::begin(const char * host, uint16_t port)
+{
+        if (_initialized) {
+                return;
         }
 
-        _gotIPHandler = WiFi.onStationModeGotIP([this](const WiFiEventStationModeGotIP & event) {
-                DebugUDPf("[UDP_broadcast::_gotIPHandler]\n");
-                _restart();
+        if (_host) {
+                _host = host;
+        } else {
+                char tmp[15];
+                sprintf(tmp, "esp8266-%06x", ESP.getChipId());
+                _host = tmp;
+        }
 
-        });
+        _port = port;
 
-        _disconnectedHandler = WiFi.onStationModeDisconnected([this](const WiFiEventStationModeDisconnected & event) {
-                DebugUDPf("[UDP_broadcast::_disconnectedHandler]\n");
-                _restart();
+        end();
 
-        });
+        _listen();
 
         _sendRequest(PING);
 
+        if (!_gotIPHandler) {
+                _gotIPHandler = WiFi.onStationModeGotIP([this](const WiFiEventStationModeGotIP & event) {
+                        DebugUDPf("[UDP_broadcast::_gotIPHandler]\n");
+                        if (_initialized) {
+                                _restart();
+                        }
+
+                });
+        }
+
+        if (!_disconnectedHandler) {
+                
+                _disconnectedHandler = WiFi.onStationModeDisconnected([this](const WiFiEventStationModeDisconnected & event) {
+                        DebugUDPf("[UDP_broadcast::_disconnectedHandler]\n");
+                        end();
+                });
+        }
+
         DebugUDPf("[UDP_broadcast::begin] Finished\n");
+}
+
+void ESPdeviceFinder::setHost(const char * host )
+{
+        _host = host;
+
+        if (_initialized) {
+                end();
+                begin();
+        }
+}
+
+void ESPdeviceFinder::setPort(uint16_t port )
+{
+        _port = port;
+
+        if (_initialized) {
+                end();
+                begin();
+        }
+
+}
+
+void ESPdeviceFinder::_onRx()
+{
+
+        if (!_conn->next()) { return; }
+        _parsePacket();
+
+}
+
+void ESPdeviceFinder::_restart()
+{
+        end();
+        _listen();
+        _sendRequest(PING);
 }
 
 void ESPdeviceFinder::loop()
 {
 
-        if (_udp.parsePacket()) {
-                _parsePacket();
-        }
+        // if (_udp.parsePacket()) {
+        //         _parsePacket();
+        // }
 
         // if (millis() - _lastmessage > 10000) {
         //         _sendRequest(PONG);
@@ -103,29 +201,51 @@ void ESPdeviceFinder::loop()
 
 }
 
-void ESPdeviceFinder::_restart()
-{
-        DebugUDPf("[UDP_broadcast::_restart]\n");
-        if (_udp) {
-                _udp.stop();
-        }
+// void ESPdeviceFinder::_restart()
+// {
+//         DebugUDPf("[UDP_broadcast::_restart]\n");
+//         if (_udp) {
+//                 _udp.stop();
+//         }
 
-        _listen();
+//         _listen();
 
 
-}
+// }
 
-void ESPdeviceFinder::setHost(const char * host )
-{
-        _host = host;
-}
+
 
 bool ESPdeviceFinder::_listen()
 {
         DebugUDPf("[UDP_broadcast::_listen]\n");
 
-        _state = _udp.beginMulticast( WiFi.localIP(),  ESPdeviceFinder_MULTICAST_ADDR, _port);
+        if (_conn) {
+                return false;
+        }
 
+        ip_addr_t ifaddr;
+        ifaddr.addr = (uint32_t) WiFi.localIP();
+        ip_addr_t multicast_addr;
+        multicast_addr.addr = (uint32_t) _addr;
+
+        if (igmp_joingroup(&ifaddr, &multicast_addr) != ERR_OK) {
+                return false;
+        }
+
+        _conn = new UdpContext;
+
+        if (_conn) {
+
+                _conn->ref();
+
+                if (!_conn->listen(*IP_ADDR_ANY, _port)) { return false; }
+
+                _conn->onRx(std::bind(&ESPdeviceFinder::_onRx, this));
+
+                _initialized = true;
+                return true;
+
+        }
 }
 
 void ESPdeviceFinder::_parsePacket()
@@ -133,27 +253,31 @@ void ESPdeviceFinder::_parsePacket()
 
         IPAddress IP;
 
-        size_t size = _udp.available();
+        if (!_conn) {
+                return;
+        }
 
-        UDP_REQUEST_TYPE method = static_cast<UDP_REQUEST_TYPE>(_udp.read());   //byte 1
+        size_t size = _conn->getSize();
+
+        UDP_REQUEST_TYPE method = static_cast<UDP_REQUEST_TYPE>(_conn->read());   //byte 1
 
         char tmp[2];
 
-        tmp[0] = _udp.read(); // byte 2
-        tmp[1] = _udp.read(); // byte 3
+        tmp[0] = _conn->read(); // byte 2
+        tmp[1] = _conn->read(); // byte 3
 
         uint16_t port = ((uint16_t)tmp[1] << 8) | tmp[0];
 
         for (uint8_t i = 0; i < 4; i++)  {
-                IP[i] = _udp.read();  //bytes 4,5,6,7
+                IP[i] = _conn->read();  //bytes 4,5,6,7
         }
-        uint8_t host_len = _udp.read();  // byte 8
+        uint8_t host_len = _conn->read();  // byte 8
 
         std::unique_ptr<char[]> buf(new char[host_len + 1]);
 
-        _udp.read( buf.get(), host_len); // bytes 8;
+        _conn->read( buf.get(), host_len); // bytes 8;
         buf[host_len] = '\0';
-        _udp.flush();
+        _conn->flush();
         DebugUDPf("[UDP_broadcast::_parsePacket] UDP RECIEVED [%u] %s (%u.%u.%u.%u:%u) %s\n", millis(), (method == PING) ? "PING" : "PONG", IP[0], IP[1], IP[2], IP[3], port, buf.get());
         _addToList(IP, std::move(buf) );
 
@@ -163,45 +287,84 @@ void ESPdeviceFinder::_parsePacket()
         }
 }
 
+void ESPdeviceFinder::setMulticastIP(IPAddress addr)
+{
+        _addr = addr;
+
+        if (_initialized) {
+                end();
+                _listen();
+        }
+}
+
 void ESPdeviceFinder::_sendRequest(UDP_REQUEST_TYPE method)
 {
 
         DebugUDPf("[UDP_broadcast::_sendRequest] type = %s, state=%u, _udp=%u, port=%u :", (method == PING) ? "PING" : "PONG", (_udp) ? true : false, _state, _port);
 
-        if (!_udp || !_state) {
+        if (!_conn || !_initialized) {
                 DebugUDPf(" failed\n");
                 return;
         }
 
+        ip_addr_t mcastAddr;
+        mcastAddr.addr = _addr;
+
+
         IPAddress IP = WiFi.localIP();
 
-        if (_udp.beginPacketMulticast(ESPdeviceFinder_MULTICAST_ADDR, _port, WiFi.localIP())) {
-
-                const char ip[4] = { IP[0], IP[1], IP[2], IP[3] };
-
-                _udp.write(reinterpret_cast<const uint8_t *>(&method), 1);
-                _udp.write(reinterpret_cast<const uint8_t *>(&_port), 2);
-                _udp.write( ip, 4);
-
-                if (_host) {
-                        //DebugUDPf("[UDP_broadcast::_sendRequest] host = %s\n", _host);
-                        uint8_t host_len = strlen(_host);
-                        _udp.write(reinterpret_cast<const uint8_t *>(&host_len), 1);
-                        _udp.write(_host, strlen(_host) + 1);
-                } else {
-                        //DebugUDPf("[UDP_broadcast::_sendRequest] No Host\n");
-                        const char * no_host = "No Host";
-                        _udp.write(reinterpret_cast<const uint8_t *>(&no_host), strlen(no_host) + 1);
-                }
-
-                if (_udp.endPacket()) {
-                        DebugUDPf(" success\n");
-                        return;
-                }
+        if (!_conn->connect(mcastAddr, _port)) {
+                return;
         }
 
+        ip_addr_t ifAddr;
+        ifAddr.addr = WiFi.localIP();
 
-        DebugUDPf(" failed\n");
+        _conn->setMulticastInterface( ifAddr ) ;
+        _conn->setMulticastTTL(1);
+
+        const char ip[4] = { IP[0], IP[1], IP[2], IP[3] };
+
+        _conn->append(reinterpret_cast<const char *>(&method), 1);
+        _conn->append(reinterpret_cast<const char *>(&_port), 2);
+        _conn->append( ip, 4);
+
+        uint8_t host_len = _host.length();
+        _conn->append(reinterpret_cast<const char *>(&host_len), 1);
+        _conn->append(_host.c_str(), host_len + 1);
+
+        _conn->send();
+
+
+//  old below
+
+        // if (_udp.beginPacketMulticast(ESPdeviceFinder_MULTICAST_ADDR, _port, WiFi.localIP())) {
+
+        //         const char ip[4] = { IP[0], IP[1], IP[2], IP[3] };
+
+        //         _udp.write(reinterpret_cast<const uint8_t *>(&method), 1);
+        //         _udp.write(reinterpret_cast<const uint8_t *>(&_port), 2);
+        //         _udp.write( ip, 4);
+
+        //         if (_host) {
+        //                 //DebugUDPf("[UDP_broadcast::_sendRequest] host = %s\n", _host);
+        //                 uint8_t host_len = strlen(_host);
+        //                 _udp.write(reinterpret_cast<const uint8_t *>(&host_len), 1);
+        //                 _udp.write(_host, strlen(_host) + 1);
+        //         } else {
+        //                 //DebugUDPf("[UDP_broadcast::_sendRequest] No Host\n");
+        //                 const char * no_host = "No Host";
+        //                 _udp.write(reinterpret_cast<const uint8_t *>(&no_host), strlen(no_host) + 1);
+        //         }
+
+        //         if (_udp.endPacket()) {
+        //                 DebugUDPf(" success\n");
+        //                 return;
+        //         }
+        // }
+
+
+        //DebugUDPf(" failed\n");
 
 }
 
@@ -244,28 +407,28 @@ uint8_t ESPdeviceFinder::count()
 
 const char * ESPdeviceFinder::getName(uint8_t i)
 {
-        uint8_t count = 0; 
+        uint8_t count = 0;
 
-        for (UDPList::iterator it=devices.begin(); it!=devices.end(); ++it) {
+        for (UDPList::iterator it = devices.begin(); it != devices.end(); ++it) {
                 if (count == i) {
                         UDP_item & udp_item = **it;
                         return udp_item.name.get();
                 }
-                count++; 
+                count++;
         }
 }
 
 
 IPAddress ESPdeviceFinder::getIP(uint8_t i)
 {
-        uint8_t count = 0; 
+        uint8_t count = 0;
 
-        for (UDPList::iterator it=devices.begin(); it!=devices.end(); ++it) {
+        for (UDPList::iterator it = devices.begin(); it != devices.end(); ++it) {
                 if (count == i) {
                         UDP_item & udp_item = **it;
                         return udp_item.IP;
                 }
-                count++; 
+                count++;
         }
 }
 
