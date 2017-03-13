@@ -46,7 +46,6 @@ void ESPdeviceFinder::end()
 {
         if (_conn) {
                 _conn->unref();
-                delete _conn;
                 _conn = nullptr;
         }
         _initialized = false;
