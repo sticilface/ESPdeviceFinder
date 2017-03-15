@@ -81,7 +81,9 @@ public:
   
   void loop();
 
-
+  void ping() {
+     _sendRequest(PING);
+  }
 
   uint8_t count();
   const char * getName(uint8_t i); 

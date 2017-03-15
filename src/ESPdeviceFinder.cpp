@@ -61,7 +61,7 @@ void ESPdeviceFinder::begin(const char * host, uint16_t port)
                 _host = host;
         } else {
                 char tmp[15];
-                sprintf(tmp, "esp8266-%06x", ESP.getChipId());
+                sprintf_P(tmp, PSTR("esp8266-%06x"), ESP.getChipId());
                 _host = tmp;
         }
 
