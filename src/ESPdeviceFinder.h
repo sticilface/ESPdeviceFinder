@@ -48,10 +48,7 @@
 #define DebugUDPf(...) {}
 #endif
 
-
-
 class UdpContext;
-
 
 class ESPdeviceFinder
 {
@@ -63,8 +60,7 @@ public:
     IPAddress IP;
     std::unique_ptr<char[]> name;
     std::unique_ptr<char[]> appName;
-    uint32_t lastseen;
-
+    uint32_t lastseen{0};
   };
 
   typedef std::list<  std::unique_ptr<UDP_item>  > UDPList;
@@ -72,10 +68,11 @@ public:
 
   ESPdeviceFinder();
   ~ESPdeviceFinder();
-  void begin(const char * host = nullptr, uint16_t port = DEFAULT_ESPDEVICE_PORT);
+  void begin(const char * host = nullptr, uint16_t port = 0);
   void end();
 
   void setHost(const char * host);
+  void setAppName(const char * appName); 
   void setPort(uint16_t port);
   void setMulticastIP(IPAddress addr);
 
@@ -92,6 +89,7 @@ public:
 
 
 private:
+  void _begin(); 
 
   enum UDP_REQUEST_TYPE : uint8_t { PING = 0, PONG };
   UDPList devices;
@@ -101,20 +99,19 @@ private:
   void _update();
   void _parsePacket();
   void _sendRequest(UDP_REQUEST_TYPE method);
-  void _addToList(IPAddress IP, std::unique_ptr<char[]>(ID));
+  void _addToList(IPAddress IP, std::unique_ptr<char[]>(ID) , std::unique_ptr<char[]>(appName));
   void _restart();
 
   void _onRx();
 
   uint16_t _port{0};
   String _host;
+  String _appName; 
   uint32_t _lastmessage{0};
 
   bool _waiting4ping{false};
   uint32_t _checkTimeOut{0};
   uint32_t _sendPong{0};
-  //bool _state{false};
-  //WiFiUDP _udp;
 
   WiFiEventHandler _disconnectedHandler;
   WiFiEventHandler _gotIPHandler;
