@@ -23,6 +23,34 @@ extern "C"
 
 static const IPAddress ESPdeviceFinder_MULTICAST_ADDR(224, 0, 0, 251);
 
+
+ESPdeviceFinder::UDP_item::UDP_item(IPAddress ip, const char * ID, const char * app)
+        : IP(ip)
+        , name( std::unique_ptr<char[]>())
+        , appName(std::unique_ptr<char[]>())
+{
+        if (ID) {
+                size_t len = strnlen(ID, 32);
+                name = std::unique_ptr<char[]>(new char[len + 1]);
+                strncpy( name.get() , ID, 32 );
+        }
+        if (app) {
+                size_t len = strnlen(app, 32);
+                name = std::unique_ptr<char[]>(new char[len + 1]);
+                strncpy( name.get() , app, 32 );
+        }
+        DebugUDPf("[UDP_item::UDP_item] %s [%s] (%u.%u.%u.%u)\n", name.get(), (appName.get()) ? appName.get() : "null"  , IP[0], IP[1], IP[2], IP[3]);
+        lastseen = millis();
+};
+
+ESPdeviceFinder::UDP_item::~UDP_item()
+{
+        DebugUDPf("~[UDP_item::UDP_item] %s [%s] (%u.%u.%u.%u)\n", name.get(), (appName.get()) ? appName.get() : "null"  , IP[0], IP[1], IP[2], IP[3]);
+}
+
+
+
+
 ESPdeviceFinder::ESPdeviceFinder(): _addr(ESPdeviceFinder_MULTICAST_ADDR)
 {
 
@@ -84,7 +112,7 @@ void ESPdeviceFinder::begin(const char * host, uint16_t port)
         }
 
         if (!_disconnectedHandler) {
-                
+
                 _disconnectedHandler = WiFi.onStationModeDisconnected([this](const WiFiEventStationModeDisconnected & event) {
                         DebugUDPf("[UDP_broadcast::_disconnectedHandler]\n");
                         end();

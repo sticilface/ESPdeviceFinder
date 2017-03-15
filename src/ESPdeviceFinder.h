@@ -26,6 +26,7 @@
 #define ESP_DEVICE_FINDER_H
 
 #include <functional>
+#include <memory>
 
 #include <ESP8266WiFi.h>
 //#include <WiFiUdp.h>
@@ -37,7 +38,7 @@
 #define DEFAULT_ESPDEVICE_PORT 8269
 
 //#define DebugUDP Serial
-//#define UDP_TEST_SENDER //  this sends lots of pretend values not currently implemented correctly though! 
+//#define UDP_TEST_SENDER //  this sends lots of pretend values not currently implemented correctly though!
 
 #if defined(DebugUDP)
 //#define DebugUDPf(...) DebugUDP.printf(__VA_ARGS__)
@@ -51,47 +52,47 @@
 
 class UdpContext;
 
-struct UDP_item {
-  UDP_item(IPAddress ip, const char * ID) : IP(ip), name(new char[strlen(ID) + 1 ]) {
-    strcpy( name.get() , ID );
-    DebugUDPf("[UDP_item::UDP_item] %s (%u.%u.%u.%u)\n", name.get(), IP[0], IP[1], IP[2], IP[3]);
-    lastseen = millis();
-  };
-  ~UDP_item() {
-    DebugUDPf("[UDP_item::~UDP_item] %s (%u.%u.%u.%u)\n", name.get(), IP[0], IP[1], IP[2], IP[3]);
-  }
-  IPAddress IP;
-  std::unique_ptr<char[]> name;
-  uint32_t lastseen;
-};
 
-typedef std::list<  std::unique_ptr<UDP_item>  > UDPList;
-
-
-class ESPdeviceFinder {
+class ESPdeviceFinder
+{
 public:
+
+  struct UDP_item {
+    ~UDP_item();
+    UDP_item(IPAddress ip, const char * ID, const char * app = nullptr);
+    IPAddress IP;
+    std::unique_ptr<char[]> name;
+    std::unique_ptr<char[]> appName;
+    uint32_t lastseen;
+
+  };
+
+  typedef std::list<  std::unique_ptr<UDP_item>  > UDPList;
+  
+
   ESPdeviceFinder();
   ~ESPdeviceFinder();
   void begin(const char * host = nullptr, uint16_t port = DEFAULT_ESPDEVICE_PORT);
-  void end(); 
-  
+  void end();
+
   void setHost(const char * host);
-  void setPort(uint16_t port); 
-  void setMulticastIP(IPAddress addr); 
-  
+  void setPort(uint16_t port);
+  void setMulticastIP(IPAddress addr);
+
   void loop();
 
-  void ping() {
-     _sendRequest(PING);
+  void ping()
+  {
+    _sendRequest(PING);
   }
 
   uint8_t count();
-  const char * getName(uint8_t i); 
-  IPAddress getIP(uint8_t i); 
+  const char * getName(uint8_t i);
+  IPAddress getIP(uint8_t i);
 
 
 private:
-  
+
   enum UDP_REQUEST_TYPE : uint8_t { PING = 0, PONG };
   UDPList devices;
   //void _restart();
@@ -101,14 +102,14 @@ private:
   void _parsePacket();
   void _sendRequest(UDP_REQUEST_TYPE method);
   void _addToList(IPAddress IP, std::unique_ptr<char[]>(ID));
-  void _restart(); 
+  void _restart();
 
   void _onRx();
 
   uint16_t _port{0};
   String _host;
   uint32_t _lastmessage{0};
-  
+
   bool _waiting4ping{false};
   uint32_t _checkTimeOut{0};
   uint32_t _sendPong{0};
@@ -120,12 +121,12 @@ private:
 
   UdpContext* _conn{nullptr};
   bool _initialized{false};
-  IPAddress _addr; 
+  IPAddress _addr;
 
 
-  #ifdef UDP_TEST_SENDER
-      void _test_sender();
-  #endif
+#ifdef UDP_TEST_SENDER
+  void _test_sender();
+#endif
 
 
 
