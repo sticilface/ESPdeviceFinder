@@ -56,10 +56,10 @@ public:
 
   struct UDP_item {
     ~UDP_item();
-    UDP_item(IPAddress ip, const char * ID, const char * app = nullptr);
+    UDP_item(IPAddress ip, std::unique_ptr<char[]>(ID) );
     IPAddress IP;
     std::unique_ptr<char[]> name;
-    std::unique_ptr<char[]> appName;
+    //std::unique_ptr<char[]> appName;
     uint32_t lastseen{0};
   };
 
@@ -71,10 +71,12 @@ public:
   void begin(const char * host = nullptr, uint16_t port = 0);
   void end();
 
-  void setHost(const char * host);
-  void setAppName(const char * appName); 
+  void setHost(String host);
+  void setAppName(String appName); 
   void setPort(uint16_t port);
   void setMulticastIP(IPAddress addr);
+
+  void filterByAppName(bool value) { _filterByAppName = value; } 
 
   void loop();
 
@@ -85,8 +87,11 @@ public:
 
   uint8_t count();
   const char * getName(uint8_t i);
-  IPAddress getIP(uint8_t i);
+  //const char * getAppName(uint8_t i); 
 
+  IPAddress getIP(uint8_t i);
+  void cacheResults(bool val); 
+  void clearResults(); 
 
 private:
   void _begin(); 
@@ -99,7 +104,7 @@ private:
   void _update();
   void _parsePacket();
   void _sendRequest(UDP_REQUEST_TYPE method);
-  void _addToList(IPAddress IP, std::unique_ptr<char[]>(ID) , std::unique_ptr<char[]>(appName));
+  void _addToList(IPAddress IP, std::unique_ptr<char[]>(ID));
   void _restart();
 
   void _onRx();
@@ -108,6 +113,7 @@ private:
   String _host;
   String _appName; 
   uint32_t _lastmessage{0};
+  bool _cacheResults{true}; 
 
   bool _waiting4ping{false};
   uint32_t _checkTimeOut{0};
@@ -119,6 +125,10 @@ private:
   UdpContext* _conn{nullptr};
   bool _initialized{false};
   IPAddress _addr;
+
+  bool _filterByAppName{true}; 
+
+  void _dumpMem(void * mem, size_t size); 
 
 
 #ifdef UDP_TEST_SENDER

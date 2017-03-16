@@ -24,28 +24,27 @@ extern "C"
 static const IPAddress ESPdeviceFinder_MULTICAST_ADDR(224, 0, 0, 251);
 
 
-ESPdeviceFinder::UDP_item::UDP_item(IPAddress ip, const char * ID, const char * app)
+ESPdeviceFinder::UDP_item::UDP_item(IPAddress ip, std::unique_ptr<char[]>(ID))
         : IP(ip)
-        , name( std::unique_ptr<char[]>())
-        , appName(std::unique_ptr<char[]>())
+        , name( std::move(ID))
 {
-        if (ID) {
-                size_t len = strnlen(ID, 33);
-                name = std::unique_ptr<char[]>(new char[len + 1]);
-                strncpy( name.get() , ID, 33 );
-        }
-        if (app) {
-                size_t len = strnlen(app, 33);
-                name = std::unique_ptr<char[]>(new char[len + 1]);
-                strncpy( name.get() , app, 33 );
-        }
-        DebugUDPf("[UDP_item::UDP_item] %s [%s] (%u.%u.%u.%u)\n", name.get(), (appName.get()) ? appName.get() : "null"  , IP[0], IP[1], IP[2], IP[3]);
+        // if (ID) {
+        //         size_t len = strnlen(ID, 33);
+        //         name = std::unique_ptr<char[]>(new char[len + 1]);
+        //         strncpy( name.get() , ID, 33 );
+        // }
+        // if (app) {
+        //         size_t len = strnlen(app, 33);
+        //         name = std::unique_ptr<char[]>(new char[len + 1]);
+        //         strncpy( name.get() , app, 33 );
+        // }
+        DebugUDPf("[UDP_item::UDP_item] %s  (%u.%u.%u.%u)\n", name.get() , IP[0], IP[1], IP[2], IP[3]);
         lastseen = millis();
 };
 
 ESPdeviceFinder::UDP_item::~UDP_item()
 {
-        DebugUDPf("~[UDP_item::UDP_item] %s [%s] (%u.%u.%u.%u)\n", name.get(), (appName.get()) ? appName.get() : "null"  , IP[0], IP[1], IP[2], IP[3]);
+        DebugUDPf("~[UDP_item::UDP_item] %s  (%u.%u.%u.%u)\n", name.get(), IP[0], IP[1], IP[2], IP[3]);
 }
 
 
@@ -102,7 +101,7 @@ void ESPdeviceFinder::_begin()
                 return;
         }
 
-        if (!_host) {
+        if (_host.length() == 0 ) {
                 char tmp[15];
                 sprintf_P(tmp, PSTR("esp8266-%06x"), ESP.getChipId());
                 _host = tmp;
@@ -120,7 +119,6 @@ void ESPdeviceFinder::_begin()
                         if (_initialized) {
                                 _restart();
                         }
-
                 });
         }
 
@@ -136,19 +134,17 @@ void ESPdeviceFinder::_begin()
         DebugUDPf("[UDP_broadcast::begin] Finished\n");
 }
 
-void ESPdeviceFinder::setHost(const char * host )
+void ESPdeviceFinder::setHost(String host )
 {
         _host = host;
-
         if (_initialized) {
                 _restart();
         }
 }
 
-void ESPdeviceFinder::setAppName(const char * appName)
+void ESPdeviceFinder::setAppName(String appName)
 {
         _appName = appName;
-
         if (_initialized) {
                 _restart();
         }
@@ -157,7 +153,6 @@ void ESPdeviceFinder::setAppName(const char * appName)
 void ESPdeviceFinder::setPort(uint16_t port )
 {
         _port = port;
-
         if (_initialized) {
                 _restart();
         }
@@ -231,7 +226,8 @@ void ESPdeviceFinder::loop()
                 }
         } else {
 
-                if (millis() - _checkTimeOut > UDP_TASK_TIMEOUT) {
+                //  send out periodic pings if non are found but only if you are actually checking for other devices.... 
+                if (_cacheResults && millis() - _checkTimeOut > UDP_TASK_TIMEOUT) {
                         DebugUDPf("[UDP_broadcast::loop] No Devices found sending PING\n");
                         _sendRequest(PING);
                         _checkTimeOut = millis();
@@ -292,6 +288,7 @@ bool ESPdeviceFinder::_listen()
 
 void ESPdeviceFinder::_parsePacket()
 {
+        //DebugUDPf("_parsePacket\n"); 
 
         IPAddress IP;
 
@@ -301,12 +298,13 @@ void ESPdeviceFinder::_parsePacket()
 
         size_t size = _conn->getSize();
 
-        std::unique_ptr<char[]>packet(new char[size + 1]);
+        std::unique_ptr<char[]>packet(new char[size]);
 
         if (packet) {
                 _conn->read( packet.get(), size); //  read the whole lot into buffer 
+                DebugUDPf("Got Packet Length: %u : ", size); 
+                _dumpMem(packet.get(), size); 
                 _conn->flush();
-
         } else {
                 _conn->flush();
                 return; 
@@ -323,7 +321,7 @@ void ESPdeviceFinder::_parsePacket()
                 return;
         }
 
-        UDP_REQUEST_TYPE method = *reinterpret_cast<UDP_REQUEST_TYPE *>(& packet[1]);  //byte 1
+        UDP_REQUEST_TYPE method = *reinterpret_cast<UDP_REQUEST_TYPE *>(&packet[1]);  //byte 1
 
         uint16_t port = *reinterpret_cast<uint16_t*>(&packet[2]);
 
@@ -340,6 +338,8 @@ void ESPdeviceFinder::_parsePacket()
                         memcpy( buf.get(), &packet[10], host_len); // bytes 10 -> host_len;
                         buf[host_len] = '\0';
                 }
+        } else {
+                return; 
         }
 
         std::unique_ptr<char[]>bufappname;
@@ -350,12 +350,27 @@ void ESPdeviceFinder::_parsePacket()
                         memcpy( bufappname.get(), &packet[10 + host_len], app_len); // bytes 10 -> host_len;
                         bufappname[app_len] = '\0';
                 }
+        } else {
+                static const char * mynullstr = "null";
+                size_t len = strlen(mynullstr); 
+                bufappname = std::unique_ptr<char[]>(new char[len + 1]);
+                if (bufappname) {
+                        memcpy( bufappname.get(), mynullstr, len); // bytes 10 -> host_len;
+                        bufappname[len + 1] = '\0';
+                }                
         }
 
-        
         DebugUDPf("[UDP_broadcast::_parsePacket] UDP RECIEVED [%u] %s (%u.%u.%u.%u:%u) %s (%s)\n", millis(), (method == PING) ? "PING" : "PONG", IP[0], IP[1], IP[2], IP[3], port, buf.get(), (bufappname) ? bufappname.get() : "null");
-        _addToList(IP, std::move(buf), std::move(bufappname) );
+        
+        if (_cacheResults) {
+                if (  (_filterByAppName && app_len && _appName.length() && _appName == String(bufappname.get())) | !_filterByAppName ) 
+                {
+                        _addToList(IP, std::move(buf));
+                } 
 
+                
+        }
+        
         if (method == PING) {
                 DebugUDPf("[UDP_broadcast::_parsePacket] Recieved PING: RESPONDING WITH PONG\n");
                 _sendPong = millis() + random(0, 50);
@@ -372,10 +387,12 @@ void ESPdeviceFinder::setMulticastIP(IPAddress addr)
         }
 }
 
+
+//This won't work at the moment.  Packet format has changed!
 void ESPdeviceFinder::_sendRequest(UDP_REQUEST_TYPE method)
 {
 
-        DebugUDPf("[UDP_broadcast::_sendRequest] type = %s, state=%u, _udp=%u, port=%u :", (method == PING) ? "PING" : "PONG", (_udp) ? true : false, _state, _port);
+        DebugUDPf("[UDP_broadcast::_sendRequest] type = %s\n", (method == PING) ? "PING" : "PONG");
 
         if (!_conn || !_initialized) {
                 DebugUDPf(" failed\n");
@@ -384,7 +401,6 @@ void ESPdeviceFinder::_sendRequest(UDP_REQUEST_TYPE method)
 
         ip_addr_t mcastAddr;
         mcastAddr.addr = _addr;
-
 
         IPAddress IP = WiFi.localIP();
 
@@ -400,50 +416,60 @@ void ESPdeviceFinder::_sendRequest(UDP_REQUEST_TYPE method)
 
         const char ip[4] = { IP[0], IP[1], IP[2], IP[3] };
 
-        _conn->append(reinterpret_cast<const char *>(&method), 1);
-        _conn->append(reinterpret_cast<const char *>(&_port), 2);
-        _conn->append( ip, 4);
+        /*  Append Data */ 
 
-        uint8_t host_len = _host.length();
-        _conn->append(reinterpret_cast<const char *>(&host_len), 1);
-        _conn->append(_host.c_str(), host_len + 1);
+        size_t appName_len = _appName.length();
+        size_t host_len = _host.length();
 
-        _conn->send();
+        size_t packet_size = appName_len + host_len + 10; 
 
+        std::unique_ptr<char[]>packetbuffer(new char[packet_size]);
 
-//  old below
-
-        // if (_udp.beginPacketMulticast(ESPdeviceFinder_MULTICAST_ADDR, _port, WiFi.localIP())) {
-
-        //         const char ip[4] = { IP[0], IP[1], IP[2], IP[3] };
-
-        //         _udp.write(reinterpret_cast<const uint8_t *>(&method), 1);
-        //         _udp.write(reinterpret_cast<const uint8_t *>(&_port), 2);
-        //         _udp.write( ip, 4);
-
-        //         if (_host) {
-        //                 //DebugUDPf("[UDP_broadcast::_sendRequest] host = %s\n", _host);
-        //                 uint8_t host_len = strlen(_host);
-        //                 _udp.write(reinterpret_cast<const uint8_t *>(&host_len), 1);
-        //                 _udp.write(_host, strlen(_host) + 1);
-        //         } else {
-        //                 //DebugUDPf("[UDP_broadcast::_sendRequest] No Host\n");
-        //                 const char * no_host = "No Host";
-        //                 _udp.write(reinterpret_cast<const uint8_t *>(&no_host), strlen(no_host) + 1);
-        //         }
-
-        //         if (_udp.endPacket()) {
-        //                 DebugUDPf(" success\n");
-        //                 return;
-        //         }
-        // }
+        char * buf = packetbuffer.get(); 
+        uint16_t position = 1; 
 
 
-        //DebugUDPf(" failed\n");
+        memcpy(buf + position, &method, 1 );     /* byte 1   */ position++; 
+        memcpy(buf + position, &_port, 2);       /* byte 2,3   */ position += 2; 
+        memcpy(buf + position, &ip, 4);          /* byte 4,5,6,7   */ position += 4; 
+        memcpy(buf + position, &host_len, 1); /* byte 8   */ position++;
+        memcpy(buf + position, &appName_len, 1);    /* byte 9   */ position++; 
+
+        if (host_len && host_len < 33) {
+                //DebugUDPf("host_len = %u, host const char * addr = %p, _host = %s\n", host_len, _host.c_str(), _host.c_str());
+                memcpy( buf + position, _host.c_str(), host_len );  position += host_len; 
+        }
+
+        if (appName_len && appName_len < 33) {
+                //DebugUDPf("appName_len = %u, appName const char * addr = %p, _appName = %s\n", appName_len, _appName.c_str(), _appName.c_str());
+                memcpy( buf + position, _appName.c_str(), appName_len);  position += appName_len; 
+        }
+        // 
+
+
+        /*  Calculate XOR */ 
+
+        uint8_t XOR{0};
+
+        for (size_t i = 1; i < packet_size ; i++) {
+                XOR ^= buf[i];
+        }
+
+        buf[0] = XOR; 
+
+        // DebugUDPf("Send Packet Length: %u : ", packet_size); 
+        // _dumpMem(buf, packet_size);  
+
+        _conn->append(buf, packet_size); 
+        bool result = _conn->send();
+
+        if (!result) {
+               DebugUDPf("ERROR sending Packet\n");  
+        }
 
 }
 
-void ESPdeviceFinder::_addToList(IPAddress IP, std::unique_ptr<char[]>(ID), std::unique_ptr<char[]>(appName) )
+void ESPdeviceFinder::_addToList(IPAddress IP, std::unique_ptr<char[]>(ID) )
 {
 
         if (!ID) {
@@ -467,19 +493,19 @@ void ESPdeviceFinder::_addToList(IPAddress IP, std::unique_ptr<char[]>(ID), std:
                                 strcpy(  item.name.get(), ID.get() );
                         }
                         //  if the appName has changed update the record. 
-                        if (appName && strcmp(appName.get(), item.appName.get() )  )  {
-                                DebugUDPf("[UDP_broadcast::_addToList] name different reassigning %s->%s\n", item.name.get(), ID.get());
-                                std::unique_ptr<char[]> p( new char[strlen(appName.get()) + 1]  );
-                                item.appName = std::move(p);
-                                strcpy(  item.appName.get(), appName.get() );
-                        }
+                        // if (appName && strcmp(appName.get(), item.appName.get() )  )  {
+                        //         DebugUDPf("[UDP_broadcast::_addToList] name different reassigning %s->%s\n", item.name.get(), ID.get());
+                        //         std::unique_ptr<char[]> p( new char[strlen(appName.get()) + 1]  );
+                        //         item.appName = std::move(p);
+                        //         strcpy(  item.appName.get(), appName.get() );
+                        // }
 
                         item.lastseen = millis(); //  last seen time set whenever packet recieved....
                         return;
                 }
         }
 
-        devices.push_back( std::unique_ptr<UDP_item> (new UDP_item(IP, ID.get(), appName.get() ) )  );
+        devices.push_back( std::unique_ptr<UDP_item> (new UDP_item(IP, std::move(ID) ) )  );
 
 }
 
@@ -501,6 +527,19 @@ const char * ESPdeviceFinder::getName(uint8_t i)
                 count++;
         }
 }
+
+// const char * ESPdeviceFinder::getAppName(uint8_t i)
+// {
+//         uint8_t count = 0;
+
+//         for (UDPList::iterator it = devices.begin(); it != devices.end(); ++it) {
+//                 if (count == i) {
+//                         UDP_item & udp_item = **it;
+//                         return udp_item.appName.get();
+//                 }
+//                 count++;
+//         }
+// }
 
 
 IPAddress ESPdeviceFinder::getIP(uint8_t i)
@@ -564,4 +603,26 @@ void ESPdeviceFinder::_test_sender()
 
 }
 
-#endif
+#endif // UDP_TEST_SENDER
+
+void ESPdeviceFinder::cacheResults(bool val) {
+        _cacheResults = val;
+        if (!_cacheResults) {
+                clearResults(); 
+        }
+}
+
+void ESPdeviceFinder::clearResults() {
+        devices.clear();
+}
+
+void ESPdeviceFinder::_dumpMem(void *mem, size_t size) {
+  int i;
+  unsigned char *p = (unsigned char *)mem;
+  for ( i = 0 ; i < size; i++) {
+    DebugUDPf("%02x ", p[i]);
+    if (i && i % 32 == 0) { Serial.println(); } 
+  }
+  DebugUDPf("\n");
+}
+
