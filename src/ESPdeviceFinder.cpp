@@ -628,7 +628,9 @@ void ESPdeviceFinder::_dumpMem(void *mem, size_t size) {
   unsigned char *p = (unsigned char *)mem;
   for ( i = 0 ; i < size; i++) {
     DebugUDPf("%02x ", p[i]);
-    if (i && i % 32 == 0) { Serial.println(); } 
+    #ifdef DebugUDP
+    if (i && i % 32 == 0) { DebugUDP.println(); } 
+    #endif
   }
   DebugUDPf("\n");
 }
