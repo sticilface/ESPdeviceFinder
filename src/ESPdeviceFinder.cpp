@@ -1,3 +1,10 @@
+/*! \file 
+    \brief ESP Device Finder File
+    
+    This is to test the documentation of Device Finder.  
+    ff
+*/
+
 #include "ESPdeviceFinder.h"
 
 extern "C"
@@ -275,6 +282,8 @@ bool ESPdeviceFinder::_listen()
                 return true;
 
         }
+
+        return false; 
 }
 
 // struct UDP_MSG {
@@ -323,7 +332,7 @@ void ESPdeviceFinder::_parsePacket()
 
         UDP_REQUEST_TYPE method = *reinterpret_cast<UDP_REQUEST_TYPE *>(&packet[1]);  //byte 1
 
-        uint16_t port = *reinterpret_cast<uint16_t*>(&packet[2]);
+        //uint16_t port = *reinterpret_cast<uint16_t*>(&packet[2]);  not currently used..  
 
         IP = *reinterpret_cast<uint32_t*>(&packet[4]) ; 
         uint8_t host_len = packet[8];  // byte 8
@@ -404,7 +413,7 @@ void ESPdeviceFinder::_sendRequest(UDP_REQUEST_TYPE method)
 
         IPAddress IP = WiFi.localIP();
 
-        if (!_conn->connect(mcastAddr, _port)) {
+        if (!_conn->connect(&mcastAddr, _port)) {
                 return;
         }
 
@@ -526,6 +535,8 @@ const char * ESPdeviceFinder::getName(uint8_t i)
                 }
                 count++;
         }
+
+    return nullptr; 
 }
 
 // const char * ESPdeviceFinder::getAppName(uint8_t i)
@@ -553,6 +564,7 @@ IPAddress ESPdeviceFinder::getIP(uint8_t i)
                 }
                 count++;
         }
+        return INADDR_NONE; 
 }
 
 
@@ -617,11 +629,12 @@ void ESPdeviceFinder::clearResults() {
 }
 
 void ESPdeviceFinder::_dumpMem(void *mem, size_t size) {
-  int i;
-  unsigned char *p = (unsigned char *)mem;
-  for ( i = 0 ; i < size; i++) {
+  unsigned char *p __attribute__((unused)) = (unsigned char *)mem;
+  for ( uint i = 0 ; i < size; i++) {
     DebugUDPf("%02x ", p[i]);
-    if (i && i % 32 == 0) { Serial.println(); } 
+    #ifdef DebugUDP
+    if (i && i % 32 == 0) { DebugUDP.println(); } 
+    #endif
   }
   DebugUDPf("\n");
 }

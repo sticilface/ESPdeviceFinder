@@ -1,10 +1,16 @@
-/*
+/*! \file 
+    \brief ESP Device Finder File
+    
     UDP finder and storer of found devices.
     Port set in Melvanimate.h
 
     Sends ping every 5min unless pin recieved , should linit the traffic..
     Adds IP address and name to json array,
     First attempt at using std::smart pointers and lists
+*/
+
+/*
+
 
 
     ToDo
