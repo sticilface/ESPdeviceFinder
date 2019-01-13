@@ -274,7 +274,7 @@ bool ESPdeviceFinder::_listen()
 
                 _conn->ref();
 
-                if (!_conn->listen(*IP_ADDR_ANY, _port)) { return false; }
+                if (!_conn->listen(IP_ADDR_ANY, _port)) { return false; }
 
                 _conn->onRx(std::bind(&ESPdeviceFinder::_onRx, this));
 
@@ -411,7 +411,7 @@ void ESPdeviceFinder::_sendRequest(UDP_REQUEST_TYPE method)
 
         IPAddress IP = WiFi.localIP();
 
-        if (!_conn->connect(mcastAddr, _port)) {
+        if (!_conn->connect(&mcastAddr, _port)) {
                 return;
         }
 
