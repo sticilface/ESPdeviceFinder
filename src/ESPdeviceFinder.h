@@ -8,18 +8,13 @@
 
 
     ToDo
-    1)  impletement send and receive timeout and ping type... PING and PONG methods.
-    2)  Remove stale ones that have been slient for x time....
-    3) test changing of hostname
-    4) test for memory leaks
-    5) test for number of records..
-    6) write a tester that emulates many devices... to test
-    7)  check for nullptr / crash when STA fails... as it does cause it
-
-
-
-
-
+    1)  Possible bug where it does not recover from a loss of WiFi network. 
+    2)   check for nullptr / crash when STA fails... as it does cause it ? seems stable..  need to test further. 
+    3) 
+    4) 
+    5) 
+    6) 
+    7) 
 */
 
 #ifndef ESP_DEVICE_FINDER_H

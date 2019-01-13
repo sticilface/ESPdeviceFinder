@@ -267,7 +267,7 @@ bool ESPdeviceFinder::_listen()
 
                 _conn->ref();
 
-                if (!_conn->listen(*IP_ADDR_ANY, _port)) { return false; }
+                if (!_conn->listen(IP_ADDR_ANY, _port)) { return false; }
 
                 _conn->onRx(std::bind(&ESPdeviceFinder::_onRx, this));
 
