@@ -282,6 +282,8 @@ bool ESPdeviceFinder::_listen()
                 return true;
 
         }
+
+        return false; 
 }
 
 // struct UDP_MSG {
@@ -330,7 +332,7 @@ void ESPdeviceFinder::_parsePacket()
 
         UDP_REQUEST_TYPE method = *reinterpret_cast<UDP_REQUEST_TYPE *>(&packet[1]);  //byte 1
 
-        uint16_t port = *reinterpret_cast<uint16_t*>(&packet[2]);
+        //uint16_t port = *reinterpret_cast<uint16_t*>(&packet[2]);  not currently used..  
 
         IP = *reinterpret_cast<uint32_t*>(&packet[4]) ; 
         uint8_t host_len = packet[8];  // byte 8
@@ -533,6 +535,8 @@ const char * ESPdeviceFinder::getName(uint8_t i)
                 }
                 count++;
         }
+
+    return nullptr; 
 }
 
 // const char * ESPdeviceFinder::getAppName(uint8_t i)
@@ -560,6 +564,7 @@ IPAddress ESPdeviceFinder::getIP(uint8_t i)
                 }
                 count++;
         }
+        return INADDR_NONE; 
 }
 
 
@@ -624,9 +629,8 @@ void ESPdeviceFinder::clearResults() {
 }
 
 void ESPdeviceFinder::_dumpMem(void *mem, size_t size) {
-  int i;
-  unsigned char *p = (unsigned char *)mem;
-  for ( i = 0 ; i < size; i++) {
+  unsigned char *p __attribute__((unused)) = (unsigned char *)mem;
+  for ( uint i = 0 ; i < size; i++) {
     DebugUDPf("%02x ", p[i]);
     #ifdef DebugUDP
     if (i && i % 32 == 0) { DebugUDP.println(); } 
