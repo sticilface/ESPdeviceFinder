@@ -78,6 +78,7 @@ ESPdeviceFinder::~ESPdeviceFinder()
 
 void ESPdeviceFinder::end()
 {
+        DebugUDPf("[UDP_broadcast::END]\n");
         if (_conn) {
                 _conn->unref();
                 _conn = nullptr;
@@ -104,9 +105,7 @@ void ESPdeviceFinder::begin(const char * host, uint16_t port)
 
 void ESPdeviceFinder::_begin()
 {
-        if (_initialized) {
-                return;
-        }
+        DebugUDPf("[UDP_broadcast::being]\n");
 
         if (_host.length() == 0 ) {
                 char tmp[15];
@@ -118,12 +117,12 @@ void ESPdeviceFinder::_begin()
                 _port = DEFAULT_ESPDEVICE_PORT;
         }
 
-        _restart();
+       // _restart();
 
         if (!_gotIPHandler) {
                 _gotIPHandler = WiFi.onStationModeGotIP([this](const WiFiEventStationModeGotIP & event) {
                         DebugUDPf("[UDP_broadcast::_gotIPHandler]\n");
-                        if (_initialized) {
+                        if (!_initialized) {
                                 _restart();
                         }
                 });
@@ -176,6 +175,7 @@ void ESPdeviceFinder::_onRx()
 
 void ESPdeviceFinder::_restart()
 {
+        DebugUDPf("[UDP_broadcast::_restart]\n");
         end();
         _listen();
         _sendRequest(PING);
@@ -332,7 +332,7 @@ void ESPdeviceFinder::_parsePacket()
 
         UDP_REQUEST_TYPE method = *reinterpret_cast<UDP_REQUEST_TYPE *>(&packet[1]);  //byte 1
 
-        //uint16_t port = *reinterpret_cast<uint16_t*>(&packet[2]);  not currently used..  
+        uint16_t __attribute__((__unused__)) port = *reinterpret_cast<uint16_t*>(&packet[2]); // not currently used, but is in debug 
 
         IP = *reinterpret_cast<uint32_t*>(&packet[4]) ; 
         uint8_t host_len = packet[8];  // byte 8
