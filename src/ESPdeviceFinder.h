@@ -41,12 +41,22 @@
 //#define DebugUDP Serial
 //#define UDP_TEST_SENDER //  this sends lots of pretend values not currently implemented correctly though!
 
-#if defined(DebugUDP)
-//#define DebugUDPf(...) DebugUDP.printf(__VA_ARGS__)
-#define DebugUDPf(_1, ...) DebugUDP.printf_P( PSTR(_1), ##__VA_ARGS__) //  this saves around 5K RAM...
+// #if defined(DebugUDP)
+// //#define DebugUDPf(...) DebugUDP.printf(__VA_ARGS__)
+// #define DebugUDPf(_1, ...) DebugUDP.printf_P( PSTR(_1), ##__VA_ARGS__) //  this saves around 5K RAM...
 
+// #else
+// #define DebugUDPf(...) {}
+// #endif
+
+#if defined(DEBUGDEVICEFINDER)
+#define DEBUGDEVICEFINDERF(_1, ...)                                                                                                  \
+  {                                                                                                                             \
+    DEBUGDEVICEFINDER.printf_P(PSTR("[%-10u][%5.5s][%15.15s:L%-4u] " _1), millis(), "DEVF", __func__, __LINE__, ##__VA_ARGS__); \
+  } 
+#pragma message("DEBUG enabled for ESP DEVICE FINDER.")
 #else
-#define DebugUDPf(...) {}
+#define DEBUGDEVICEFINDERF(...){} 
 #endif
 
 class UdpContext;
